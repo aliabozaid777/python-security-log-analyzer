@@ -1,9 +1,36 @@
+import csv
 from collections import Counter
 from pathlib import Path
 
 
 LOG_FILE = Path("sample_logs/authentication.log")
+REPORT_FILE = Path("reports/security-report.csv")
 SUSPICIOUS_THRESHOLD = 5
+
+
+def write_csv_report(
+    failed_by_ip: Counter[str],
+    report_file: Path,
+) -> None:
+    """Export failed-login findings to a CSV report."""
+
+    report_file.parent.mkdir(parents=True, exist_ok=True)
+
+    with report_file.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+
+        writer.writerow(
+            ["ip_address", "failed_attempts", "status"]
+        )
+
+        for ip_address, attempts in failed_by_ip.most_common():
+            status = (
+                "Suspicious"
+                if attempts >= SUSPICIOUS_THRESHOLD
+                else "Normal"
+            )
+
+            writer.writerow([ip_address, attempts, status])
 
 
 def analyze_log(log_file: Path) -> None:
@@ -21,22 +48,26 @@ def analyze_log(log_file: Path) -> None:
             for line_number, line in enumerate(file, start=1):
                 line = line.strip()
 
-                # Ignore empty lines.
                 if not line:
                     continue
 
                 parts = line.split()
 
-                # Every valid line must contain four values.
                 if len(parts) != 4:
-                    print(f"Skipping malformed line {line_number}: {line}")
+                    print(
+                        f"Skipping malformed line "
+                        f"{line_number}: {line}"
+                    )
                     continue
 
-                timestamp, ip_address, username, result = parts
+                _timestamp, ip_address, username, result = parts
                 result = result.upper()
 
                 if result not in {"SUCCESS", "FAILED"}:
-                    print(f"Skipping invalid result on line {line_number}: {result}")
+                    print(
+                        f"Skipping invalid result on line "
+                        f"{line_number}: {result}"
+                    )
                     continue
 
                 total_events += 1
@@ -75,7 +106,10 @@ def analyze_log(log_file: Path) -> None:
             key=lambda item: item[1],
             reverse=True,
         ):
-            print(f"- {ip_address}: {attempts} failed attempts")
+            print(
+                f"- {ip_address}: "
+                f"{attempts} failed attempts"
+            )
     else:
         print("- No suspicious IP addresses detected.")
 
@@ -86,6 +120,10 @@ def analyze_log(log_file: Path) -> None:
             print(f"- {username}: {attempts} failed attempts")
     else:
         print("- No failed login attempts detected.")
+
+    write_csv_report(failed_by_ip, REPORT_FILE)
+
+    print(f"\nCSV report created: {REPORT_FILE}")
 
 
 if __name__ == "__main__":
